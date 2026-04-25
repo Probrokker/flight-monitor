@@ -1,0 +1,40 @@
+name: Flight Price Monitor
+
+on:
+  schedule:
+    # 07:00 и 13:00 МСК = 04:00 и 10:00 UTC
+    - cron: "0 4,10 * * *"
+  workflow_dispatch:  # Ручной запуск из GitHub UI
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: Run monitor
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
+
+      - name: Commit updated database
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add prices.db || true
+          git diff --staged --quiet || git commit -m "Update prices.db [$(date +%Y-%m-%d_%H:%M)]"
+          git push || true
+        continue-on-error: true

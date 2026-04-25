@@ -9,9 +9,13 @@ from playwright.async_api import async_playwright, Page
 from airports import ORIGIN, SEARCH_HORIZON_DAYS, TRIP_MIN_DAYS, TRIP_MAX_DAYS, CURRENCY
 
 # Задержки между запросами (секунды)
-REQUEST_DELAY_MIN = 1.5
-REQUEST_DELAY_MAX = 3.0
-DELAY_BETWEEN_DESTINATIONS = 5.0
+REQUEST_DELAY_MIN = 1.0
+REQUEST_DELAY_MAX = 2.0
+DELAY_BETWEEN_DESTINATIONS = 2.0
+
+# Таймауты (мс)
+PAGE_TIMEOUT = 10000
+SELECTOR_TIMEOUT = 5000
 
 
 async def _random_delay(min_sec: float = REQUEST_DELAY_MIN, max_sec: float = REQUEST_DELAY_MAX):
@@ -80,12 +84,12 @@ async def search_yandex_travel(
                 f"adults=1&children=0&infants=0&class=econom"
             )
 
-            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            await _random_delay(3, 5)
+            await page.goto(url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
+            await _random_delay(1, 2)
             await _close_popups(page)
 
             # Ждём загрузки результатов
-            await page.wait_for_selector("[data-test-id='ticket']", timeout=15000)
+            await page.wait_for_selector("[data-test-id='ticket']", timeout=SELECTOR_TIMEOUT)
 
             # Ищем цены
             price_elements = await page.query_selector_all("[data-test-id='price']")
@@ -147,12 +151,12 @@ async def search_tutu(
                 f"route[1]={dest}-LED-{ret_date}"
             )
 
-            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            await _random_delay(3, 5)
+            await page.goto(url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
+            await _random_delay(1, 2)
             await _close_popups(page)
 
             # Ждём появления результатов
-            await page.wait_for_selector("[class*='price']", timeout=15000)
+            await page.wait_for_selector("[class*='price']", timeout=SELECTOR_TIMEOUT)
 
             # Ищем элементы с ценами
             price_selectors = [
@@ -220,12 +224,12 @@ async def search_onetwotrip(
                 f"class=Y&cs=Y&route={ORIGIN}{dest}{dep_date}{ret_date}"
             )
 
-            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            await _random_delay(3, 5)
+            await page.goto(url, wait_until="domcontentloaded", timeout=PAGE_TIMEOUT)
+            await _random_delay(1, 2)
             await _close_popups(page)
 
             # Ждём загрузки
-            await page.wait_for_selector("[class*='price']", timeout=15000)
+            await page.wait_for_selector("[class*='price']", timeout=SELECTOR_TIMEOUT)
 
             price_selectors = [
                 "[class*='Price']",
@@ -315,7 +319,7 @@ async def search_destination(
                 continue
 
         # Задержка между итерациями
-        await asyncio.sleep(random.uniform(1, 2))
+        await asyncio.sleep(random.uniform(0.5, 1))
 
     return best_result
 
