@@ -4,6 +4,7 @@ import os
 import logging
 from typing import Optional
 
+from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -15,6 +16,9 @@ from telegram.ext import (
 
 from storage import get_all_current_prices, get_history, get_current_price, init_db
 from alerts import get_all_alerts, format_alert_line, get_price_trend_symbol
+
+# Загружаем переменные окружения из .env
+load_dotenv()
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -30,31 +34,31 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """Обработчик /start — приветствие и инструкции."""
     chat_id = update.effective_chat.id
     text = (
-        "✈️ *Мониторинг авиабилетов LED*\n\n"
+        "✈️ Мониторинг авиабилетов LED\n\n"
         "Привет! Я бот для отслеживания цен на авиабилеты из Санкт-Петербурга.\n\n"
-        "*Команды:*\n"
-        "`/today` — актуальные цены\n"
-        "`/history <направление> [дней]` — график цен\n"
-        "`/alerts` — аномалии и скидки\n"
-        "`/help` — справка\n\n"
-        f"📍 Ваш `chat_id`: `{chat_id}`\n"
-        "Добавьте его в `.env` для автоматических отчётов."
+        "Команды:\n"
+        "/today — актуальные цены\n"
+        "/history <направление> [дней] — график цен\n"
+        "/alerts — аномалии и скидки\n"
+        "/help — справка\n\n"
+        f"📍 Ваш chat_id: {chat_id}\n"
+        "Добавьте его в .env для автоматических отчётов."
     )
-    await update.message.reply_text(text, parse_mode="Markdown")
+    await update.message.reply_text(text)
 
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик /help."""
     text = (
-        "*Команды бота:*\n\n"
-        "`/today` — текущие минимальные цены по всем направлениям\n"
-        "`/history Москва` — история цен на Москву за 30 дней\n"
-        "`/history Москва 7` — история за 7 дней\n"
-        "`/alerts` — текущие аномалии (падение ≥20% или рекордный минимум)\n"
-        "`/start` — приветствие и получение chat_id\n\n"
+        "Команды бота:\n\n"
+        "/today — текущие минимальные цены по всем направлениям\n"
+        "/history <направление> — история цен на Москву за 30 дней\n"
+        "/history <направление> <дней> — история за N дней\n"
+        "/alerts — текущие аномалии (падение >=20% или рекордный минимум)\n"
+        "/start — приветствие и получение chat_id\n\n"
         "Отчёты приходят автоматически в 07:00 и 13:00 МСК."
     )
-    await update.message.reply_text(text, parse_mode="Markdown")
+    await update.message.reply_text(text)
 
 
 async def today_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -64,19 +68,19 @@ async def today_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("📭 База пуста. Запустите поиск или дождитесь автоматического отчёта.")
         return
 
-    lines = ["📊 *Актуальные цены LED → мир*\n"]
+    lines = ["📊 Актуальные цены LED → мир\n"]
 
     domestic = [r for r in records if r["destination_type"] == "domestic"]
     international = [r for r in records if r["destination_type"] == "international"]
 
     if domestic:
-        lines.append("\n🇷🇺 *Россия:*")
+        lines.append("\n🇷🇺 Россия:")
         for r in domestic:
             trend = get_price_trend_symbol(r["destination"], r["price"])
             lines.append(f"• {r['destination']}: {r['price']:,} ₽ {trend}")
 
     if international:
-        lines.append("\n🌍 *Зарубеж:*")
+        lines.append("\n🌍 Зарубеж:")
         for r in international:
             trend = get_price_trend_symbol(r["destination"], r["price"])
             lines.append(f"• {r['destination']}: {r['price']:,} ₽ {trend}")
@@ -86,7 +90,7 @@ async def today_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if len(text) > 4000:
         text = text[:4000] + "\n... (обрезано)"
 
-    await update.message.reply_text(text, parse_mode="Markdown")
+    await update.message.reply_text(text)
 
 
 async def history_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -94,9 +98,8 @@ async def history_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     args = context.args
     if not args:
         await update.message.reply_text(
-            "Использование: `/history <направление> [дней]`\n"
-            "Пример: `/history Москва 7`",
-            parse_mode="Markdown",
+            "Использование: /history <направление> [дней]\n"
+            "Пример: /history Москва 7"
         )
         return
 
@@ -105,11 +108,11 @@ async def history_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     records = get_history(destination, days)
     if not records:
-        await update.message.reply_text(f"📭 Нет истории для *{destination}* за {days} дней.")
+        await update.message.reply_text(f"📭 Нет истории для {destination} за {days} дней.")
         return
 
     # Формируем текстовый график
-    lines = [f"📈 *История цен: {destination}* (за {days} дней)\n"]
+    lines = [f"📈 История цен: {destination} (за {days} дней)\n"]
 
     # Группируем по дате, берём минимум за день
     daily_min = {}
@@ -149,7 +152,7 @@ async def history_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if len(text) > 4000:
         text = text[:4000] + "\n... (обрезано)"
 
-    await update.message.reply_text(text, parse_mode="Markdown")
+    await update.message.reply_text(text)
 
 
 async def alerts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -159,7 +162,7 @@ async def alerts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("🟢 Аномалий не обнаружено. Всё спокойно.")
         return
 
-    lines = ["🚨 *Текущие аномалии:*\n"]
+    lines = ["🚨 Текущие аномалии:\n"]
     for alert in alerts:
         lines.append(
             format_alert_line(
@@ -174,14 +177,14 @@ async def alerts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if len(text) > 4000:
         text = text[:4000] + "\n... (обрезано)"
 
-    await update.message.reply_text(text, parse_mode="Markdown")
+    await update.message.reply_text(text)
 
 
 async def unknown_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Ответ на неизвестные сообщения."""
     await update.message.reply_text(
         "Не понял команду 🤔\n"
-        "Напишите `/help` для списка команд."
+        "Напишите /help для списка команд."
     )
 
 
