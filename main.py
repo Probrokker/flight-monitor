@@ -74,6 +74,7 @@ def build_report(results: list) -> str:
     """Формирует текст отчёта для Telegram."""
     now = datetime.now().strftime("%d.%m.%Y %H:%M")
     lines = [f"📊 *Мониторинг LED → мир | {now}*\n"]
+    lines.append("💡 *Цены на ближайшие даты (следующие 2 недели)*\n")
 
     # Разделяем по типам
     domestic = [r for r in results if r.get("destination_type") == "domestic"]
@@ -82,26 +83,28 @@ def build_report(results: list) -> str:
     if domestic:
         lines.append("🇷🇺 *РОССИЯ:*")
         for r in domestic:
-            airport = r.get("airport", "")
-            dep = r.get("departure_date", "")
-            ret = r.get("return_date", "")
-            airline = r.get("airline", "")
+            dep = r.get('departure_date', '?')
+            ret = r.get('return_date', '?')
+            airline = r.get('airline', '')
+            transfers = r.get('transfers', 0)
+            transfer_str = "прямой" if transfers == 0 else f"{transfers} пересадка"
             airline_str = f" ({airline})" if airline else ""
             lines.append(
-                f"• {r['destination']}: {r['price']:,} ₽{airline_str} | {dep} ↔ {ret}"
+                f"• {r['destination']}: {r['price']:,} ₽{airline_str} | {dep} → {ret} | {transfer_str}"
             )
         lines.append("")
 
     if international:
         lines.append("🌍 *ЗАРУБЕЖ:*")
         for r in international:
-            airport = r.get("airport", "")
-            dep = r.get("departure_date", "")
-            ret = r.get("return_date", "")
-            airline = r.get("airline", "")
+            dep = r.get('departure_date', '?')
+            ret = r.get('return_date', '?')
+            airline = r.get('airline', '')
+            transfers = r.get('transfers', 0)
+            transfer_str = "прямой" if transfers == 0 else f"{transfers} пересадка"
             airline_str = f" ({airline})" if airline else ""
             lines.append(
-                f"• {r['destination']} ({airport}): {r['price']:,} ₽{airline_str} | {dep} ↔ {ret}"
+                f"• {r['destination']}: {r['price']:,} ₽{airline_str} | {dep} → {ret} | {transfer_str}"
             )
         lines.append("")
 

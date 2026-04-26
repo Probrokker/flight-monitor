@@ -23,7 +23,7 @@ async def _api_request(session: aiohttp.ClientSession, endpoint: str, params: di
     try:
         async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
             if resp.status != 200:
-                print(f"[API] HTTP {resp.status} для {params}")
+                print(f"[API] HTTP {resp.status} для {params.get('destination', 'unknown')}")
                 return None
             data = await resp.json()
             if not data.get("success"):
@@ -35,19 +35,69 @@ async def _api_request(session: aiohttp.ClientSession, endpoint: str, params: di
         return None
 
 
-async def search_destination_api(
+async def search_cheap_for_dates(
     session: aiohttp.ClientSession,
+    dest_iata: str,
     destination_name: str,
     destination_type: str,
-    destination_airports: List[str],
+    days_ahead: int = 14,
 ) -> Optional[Dict]:
     """
-    Ищет минимальную цену через Travelpayouts API.
-    Для зарубежных направлений ищет по первому аэропорту списка.
+    Ищет дешёвые билеты на ближайшие N дней через prices/cheap.
+    Перебирает даты вылета, возвращает самый дешёвый найденный вариант.
     """
-    dest_iata = destination_airports[0]
+    today = datetime.now()
+    best_price = None
+    best_result = None
     
-    # Получаем цены за текущий и следующий месяц
+    # Ищем на ближайшие 14 дней с интервалом 2 дня (чтобы не превысить лимит API)
+    for day_offset in range(0, days_ahead, 2):
+        depart_date = (today + timedelta(days=day_offset)).strftime("%Y-%m-%d")
+        return_date = (today + timedelta(days=day_offset + 7)).strftime("%Y-%m-%d")
+        
+        params = {
+            "origin": ORIGIN,
+            "destination": dest_iata,
+            "depart_date": depart_date,
+            "return_date": return_date,
+            "limit": 5,
+        }
+        
+        data = await _api_request(session, "prices/cheap", params)
+        if data:
+            for key, flight in data.items():
+                if not isinstance(flight, dict):
+                    continue
+                price = flight.get("price")
+                if price and (best_price is None or price < best_price):
+                    best_price = price
+                    best_result = {
+                        "price": price,
+                        "airline": flight.get("airline"),
+                        "departure_date": flight.get("departure_at", "")[:10],
+                        "return_date": flight.get("return_at", "")[:10],
+                        "source": "aviasales_api",
+                        "destination": destination_name,
+                        "destination_type": destination_type,
+                        "airport": dest_iata,
+                        "flight_number": flight.get("flight_number"),
+                        "transfers": flight.get("transfers", 0),
+                    }
+        
+        await asyncio.sleep(0.5)  # Короткая задержка между датами
+    
+    return best_result
+
+
+async def search_monthly_minimum(
+    session: aiohttp.ClientSession,
+    dest_iata: str,
+    destination_name: str,
+    destination_type: str,
+) -> Optional[Dict]:
+    """
+    Ищет абсолютный минимум за текущий и следующий месяц через prices/monthly.
+    """
     current_month = datetime.now().strftime("%Y-%m")
     next_month = (datetime.now() + timedelta(days=30)).strftime("%Y-%m")
     
@@ -63,8 +113,9 @@ async def search_destination_api(
         
         data = await _api_request(session, "prices/monthly", params)
         if data:
-            # data содержит ключи вида "2026-04" с минимальными ценами
             for month_key, flight in data.items():
+                if not isinstance(flight, dict):
+                    continue
                 price = flight.get("price")
                 if price and (best_price is None or price < best_price):
                     best_price = price
@@ -84,6 +135,32 @@ async def search_destination_api(
     return best_result
 
 
+async def search_destination_api(
+    session: aiohttp.ClientSession,
+    destination_name: str,
+    destination_type: str,
+    destination_airports: List[str],
+) -> Optional[Dict]:
+    """
+    Ищет минимальную цену: сначала на ближайшие даты (cheap),
+    потом абсолютный минимум за месяц (monthly) как fallback.
+    """
+    dest_iata = destination_airports[0]
+    
+    # Сначала ищем на ближайшие даты (актуальные цены)
+    result = await search_cheap_for_dates(
+        session, dest_iata, destination_name, destination_type, days_ahead=14
+    )
+    
+    # Если не нашли — пробуем monthly
+    if not result:
+        result = await search_monthly_minimum(
+            session, dest_iata, destination_name, destination_type
+        )
+    
+    return result
+
+
 async def search_all_destinations(destinations: List[Tuple[str, str, List[str]]]) -> List[Dict]:
     """
     Ищет цены для всех направлений через API.
@@ -96,8 +173,14 @@ async def search_all_destinations(destinations: List[Tuple[str, str, List[str]]]
             
             result = await search_destination_api(session, name, dest_type, airports)
             if result:
+                # Формируем человекочитаемую строку с датой
+                dep = result.get('departure_date', 'неизвестно')
+                ret = result.get('return_date', 'неизвестно')
+                transfers = result.get('transfers', 0)
+                transfer_str = "прямой" if transfers == 0 else f"{transfers} пересадка"
+                
+                print(f"  ✅ {result['price']:,} ₽ ({dep} → {ret}, {transfer_str})")
                 results.append(result)
-                print(f"  ✅ {result['price']:,} ₽ ({result['source']})")
             else:
                 print(f"  ❌ Цены не найдены")
             
