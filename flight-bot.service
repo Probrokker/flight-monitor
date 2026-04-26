@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/root/.openclaw/workspace/projects/flight-monitor
 Environment=TELEGRAM_BOT_TOKEN=8537390248:AAGsxHWWdV3siXrk9-xgAwGu5g6VNzmFp0k
-Environment=TELEGRAM_CHAT_ID=137259321
+Environment=TELEGRAM_CHAT_ID=137259321,1926387382
 ExecStart=/usr/bin/python3 /root/.openclaw/workspace/projects/flight-monitor/bot.py
 Restart=always
 RestartSec=10

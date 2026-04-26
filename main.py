@@ -32,7 +32,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+TELEGRAM_CHAT_IDS = os.getenv("TELEGRAM_CHAT_ID", "")
+
+
+def get_chat_ids():
+    """Возвращает список chat_id из переменной окружения."""
+    if not TELEGRAM_CHAT_IDS:
+        return []
+    return [int(cid.strip()) for cid in TELEGRAM_CHAT_IDS.split(",") if cid.strip().isdigit()]
 
 
 async def run_search() -> None:
@@ -132,12 +139,14 @@ async def main() -> None:
     logger.info(f"Отчёт сформирован ({len(report)} символов)")
 
     # Отправляем в Telegram если настроен
-    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
-        try:
-            await send_report(int(TELEGRAM_CHAT_ID), report)
-            logger.info(f"Отчёт отправлен в чат {TELEGRAM_CHAT_ID}")
-        except Exception as e:
-            logger.error(f"Ошибка отправки в Telegram: {e}")
+    chat_ids = get_chat_ids()
+    if TELEGRAM_BOT_TOKEN and chat_ids:
+        for chat_id in chat_ids:
+            try:
+                await send_report(chat_id, report)
+                logger.info(f"Отчёт отправлен в чат {chat_id}")
+            except Exception as e:
+                logger.error(f"Ошибка отправки в чат {chat_id}: {e}")
     else:
         logger.info("Telegram не настроен — вывод в консоль")
         print("\n" + "=" * 50)
