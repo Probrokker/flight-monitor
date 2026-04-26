@@ -7,7 +7,7 @@ from storage import get_rolling_average, get_historical_minimum, get_current_pri
 PRICE_DROP_THRESHOLD = 0.20
 
 
-def detect_anomaly(destination: str, current_price: int) -> Optional[Dict]:
+def detect_anomaly(destination: str, current_price: int, departure_date: str = "", return_date: str = "") -> Optional[Dict]:
     """
     Проверяет, является ли текущая цена аномалией.
     Возвращает словарь с типом алерта или None.
@@ -30,6 +30,8 @@ def detect_anomaly(destination: str, current_price: int) -> Optional[Dict]:
             "message": f"↓ {drop_pct}% к среднему за 7 дней",
             "current_price": current_price,
             "reference_price": round(rolling_avg),
+            "departure_date": departure_date,
+            "return_date": return_date,
         }
 
     # Достижение или приближение к историческому минимуму
@@ -43,6 +45,8 @@ def detect_anomaly(destination: str, current_price: int) -> Optional[Dict]:
                     "message": f"Исторический минимум! (предыдущий: {hist_price} ₽)",
                     "current_price": current_price,
                     "reference_price": hist_price,
+                    "departure_date": departure_date,
+                    "return_date": return_date,
                 }
             else:
                 # Дополняем существующий алерт
@@ -65,7 +69,9 @@ def get_all_alerts() -> List[Dict]:
     for record in current_prices:
         destination = record["destination"]
         price = record["price"]
-        alert = detect_anomaly(destination, price)
+        dep_date = record.get("departure_date", "")
+        ret_date = record.get("return_date", "")
+        alert = detect_anomaly(destination, price, dep_date, ret_date)
         if alert:
             alert["destination"] = destination
             alert["destination_type"] = record.get("destination_type", "unknown")
@@ -77,7 +83,10 @@ def get_all_alerts() -> List[Dict]:
 def format_alert_line(destination: str, price: int, alert: Dict, dest_type: str = "domestic") -> str:
     """Форматирует строку алерта для Telegram."""
     prefix = "🇷🇺" if dest_type == "domestic" else "🌍"
-    return f"{prefix} {destination}: {price:,} ₽ {alert['emoji']} ({alert['message']})"
+    dep = alert.get("departure_date", "")
+    ret = alert.get("return_date", "")
+    date_str = f" | {dep} → {ret}" if dep and ret else ""
+    return f"{prefix} {destination}: {price:,} ₽ {alert['emoji']} ({alert['message']}){date_str}"
 
 
 def get_price_trend_symbol(destination: str, current_price: int) -> str:
